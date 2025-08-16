@@ -30,6 +30,7 @@ RUN composer install
 COPY .env.example .env
 RUN php artisan key:generate
 
+RUN php artisan config:clear && php artisan cache:clear
 
 RUN mkdir -p /var/www/database \
     && touch /var/www/database/database.sqlite \
