@@ -22,19 +22,17 @@ RUN a2enmod rewrite
 # Copy project files
 COPY . .
 
-
-# Point Apache to Laravel's public folder
-RUN rm -rf /var/www/html/index.html \
-    && echo "<VirtualHost *:80>
+# Enable Apache mod_rewrite & configure virtual host
+RUN a2enmod rewrite \
+    && rm -rf /var/www/html/index.html \
+    && echo '<VirtualHost *:80>
         DocumentRoot /var/www/html/public
         <Directory /var/www/html/public>
             AllowOverride All
             Require all granted
         </Directory>
-    </VirtualHost>" > /etc/apache2/sites-available/000-default.conf \
-    && a2enmod rewrite
+    </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
-    
 # Install PHP dependencies
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 RUN composer install --no-dev --optimize-autoloader
