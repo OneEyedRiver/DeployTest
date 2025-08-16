@@ -1,54 +1,34 @@
-# Use official PHP with Apache
-FROM php:8.2-apache
+### Step 1: Node.js for frontend (Vite)
+FROM node:18 AS node-builder
 
-# Set working directory
-WORKDIR /var/www/html
-
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    git unzip libpng-dev libonig-dev libxml2-dev zip curl \
-    sqlite3 libsqlite3-dev \
-    && docker-php-ext-install pdo pdo_sqlite mbstring exif pcntl bcmath gd \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# ✅ Install Node.js (latest LTS) & npm
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
-
-# Enable Apache mod_rewrite & configure virtual host
-RUN a2enmod rewrite \
-    && rm -rf /var/www/html/index.html \
-    && cat <<EOF > /etc/apache2/sites-available/000-default.conf
-<VirtualHost *:80>
-    DocumentRoot /var/www/html/public
-    <Directory /var/www/html/public>
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-EOF
-
-# Copy project files
+WORKDIR /app
 COPY . .
 
-# Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
-
-# Install Node dependencies & build Vite
 RUN npm install && npm run build
 
-# Set correct permissions
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Run Laravel setup
-RUN php artisan storage:link || true
-RUN php artisan migrate --force || true
+### Step 2: PHP for Laravel backend
+FROM php:8.2-fpm
 
-# Expose port
-EXPOSE 80
+WORKDIR /var/www
 
-# Start Apache
-CMD ["apache2-foreground"]
+RUN apt-get update && apt-get install -y \
+    zip unzip curl git libxml2-dev libzip-dev libpng-dev libjpeg-dev libonig-dev \
+    sqlite3 libsqlite3-dev
+
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd zip
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+COPY . /var/www
+COPY --chown=www-data:www-data . /var/www
+
+# Copy only built frontend assets (from Vite)
+COPY --from=node-builder /app/public/build /var/www/public/build
+
+RUN composer install
+COPY .env.example .env
+RUN php artisan key:generate
+
+EXPOSE 8000
+CMD php artisan serve --host=0.0.0.0 --port=8000
