@@ -14,37 +14,23 @@ WORKDIR /var/www
 
 RUN apt-get update && apt-get install -y \
     zip unzip curl git libxml2-dev libzip-dev libpng-dev libjpeg-dev libonig-dev \
-    sqlite3 libsqlite3-dev \
-    && docker-php-ext-install pdo pdo_sqlite mbstring exif pcntl bcmath gd zip \
-    && rm -rf /var/lib/apt/lists/*
+    sqlite3 libsqlite3-dev
 
-# Copy composer
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd zip
+
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy app files
+COPY . /var/www
 COPY --chown=www-data:www-data . /var/www
 
 # Copy only built frontend assets (from Vite)
 COPY --from=node-builder /app/public/build /var/www/public/build
 
-# Ensure database file exists
-RUN mkdir -p /var/www/database \
-    && touch /var/www/database/database.sqlite \
-    && chown -R www-data:www-data /var/www/database
-
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
-
-# Copy env before artisan commands
+RUN composer install
 COPY .env.example .env
-
-# Generate app key
 RUN php artisan key:generate
 
-# Clear caches (make sure .env takes effect)
-RUN php artisan config:clear && php artisan cache:clear
-
 EXPOSE 8000
+CMD php artisan serve --host=0.0.0.0 --port=8000
 
-# Run migrations (force) then start server
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
+# CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
